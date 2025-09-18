@@ -1,4 +1,4 @@
-const result = getLinks({
+const links = getLinks({
   regexFilters: {
     link: {
       excludeContains: ["bunnies"],
@@ -26,33 +26,8 @@ const result = getLinks({
     },
   },
   regexMatchMode: "all",
-  trackExcluded: true,
 })
 
-// Display included links
-console.log("\n✅ INCLUDED LINKS:")
-console.table(result)
-
-// Display exclusion statistics
-if (result.stats) {
-  console.log("\n📊 FILTERING STATISTICS:")
-  console.log(`Total processed: ${result.stats.total}`)
-  console.log(`Included: ${result.stats.included}`)
-  console.log(`Excluded: ${result.stats.excluded}`)
-  console.log("\nExclusion reasons:")
-  Object.entries(result.stats.exclusionReasons).forEach(([reason, count]) => {
-    console.log(`  ${reason}: ${count}`)
-  })
-}
-
-// Display some excluded examples
-if (result.excluded && result.excluded.length > 0) {
-  console.log("\n❌ EXCLUDED LINKS (first 10):")
-  console.table(result.excluded.slice(0, 10))
-}
-
-// Copy included links to clipboard
-copyToClipboard(result, "json")
-
-// You can also copy excluded links to see what was filtered out
-// copyToClipboard(result.excluded, "json")
+// Display options
+console.table(links)
+copyToClipboard(links, "json")

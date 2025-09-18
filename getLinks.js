@@ -177,26 +177,12 @@ const createRegexFilters = (regexConfig) => {
 }
 
 const applyFilters = (items, filters, matchMode = "all") => {
-  if (!filters || filters.length === 0) return { included: items, excluded: [] }
+  if (!filters || filters.length === 0) return items
 
-  const included = []
-  const excluded = []
-
-  items.forEach((item) => {
+  return items.filter((item) => {
     const matches = filters.map((filter) => filter(item))
-    const shouldInclude = matchMode === "all" ? matches.every(Boolean) : matches.some(Boolean)
-
-    if (shouldInclude) {
-      included.push(item)
-    } else {
-      excluded.push({
-        ...item,
-        excludedBy: "regex filters",
-      })
-    }
+    return matchMode === "all" ? matches.every(Boolean) : matches.some(Boolean)
   })
-
-  return { included, excluded }
 }
 
 function getLinks(options = {}) {
@@ -211,11 +197,9 @@ function getLinks(options = {}) {
     deduplicate = true,
     regexFilters = null,
     regexMatchMode = "all",
-    trackExcluded = true,
   } = options
 
   const allLinks = []
-  const allExcluded = []
 
   // Process each source
   sources.forEach((source) => {
@@ -226,72 +210,19 @@ function getLinks(options = {}) {
 
       console.log(`Processing ${links.length} links from: ${sourceName}`)
 
-      const { processedLinks, excludedLinks } = links.reduce(
-        (acc, link) => {
+      const processedLinks = links
+        .map((link) => {
           const name = (link.textContent || "").trim() || link.getAttribute("href") || ""
           const href = link.getAttribute("href")
 
           // Skip if no href
-          if (!href) {
-            if (trackExcluded) {
-              acc.excludedLinks.push({
-                name: name,
-                link: href || "no-href",
-                source: sourceName,
-                excludedBy: "no href attribute",
-              })
-            }
-            return acc
-          }
+          if (!href) return null
 
-          // Apply basic filters and track exclusions
-          if (excludeAnchors && href.startsWith("#")) {
-            if (trackExcluded) {
-              acc.excludedLinks.push({
-                name: name,
-                link: href,
-                source: sourceName,
-                excludedBy: "anchor link",
-              })
-            }
-            return acc
-          }
-
-          if (excludeMailto && href.startsWith("mailto:")) {
-            if (trackExcluded) {
-              acc.excludedLinks.push({
-                name: name,
-                link: href,
-                source: sourceName,
-                excludedBy: "mailto link",
-              })
-            }
-            return acc
-          }
-
-          if (excludeTel && href.startsWith("tel:")) {
-            if (trackExcluded) {
-              acc.excludedLinks.push({
-                name: name,
-                link: href,
-                source: sourceName,
-                excludedBy: "tel link",
-              })
-            }
-            return acc
-          }
-
-          if (name.length < minTextLength) {
-            if (trackExcluded) {
-              acc.excludedLinks.push({
-                name: name,
-                link: href,
-                source: sourceName,
-                excludedBy: `text too short (${name.length} < ${minTextLength})`,
-              })
-            }
-            return acc
-          }
+          // Apply filters
+          if (excludeAnchors && href.startsWith("#")) return null
+          if (excludeMailto && href.startsWith("mailto:")) return null
+          if (excludeTel && href.startsWith("tel:")) return null
+          if (name.length < minTextLength) return null
 
           // Convert to absolute URL
           let absoluteUrl
@@ -299,45 +230,23 @@ function getLinks(options = {}) {
             absoluteUrl = new URL(href, baseUrl).href
           } catch (e) {
             console.warn(`Invalid URL: ${href}`, e)
-            if (trackExcluded) {
-              acc.excludedLinks.push({
-                name: name,
-                link: href,
-                source: sourceName,
-                excludedBy: "invalid URL",
-              })
-            }
-            return acc
+            return null
           }
 
           // Filter external links if requested
           if (excludeExternal && !absoluteUrl.startsWith(new URL(baseUrl).origin)) {
-            if (trackExcluded) {
-              acc.excludedLinks.push({
-                name: name,
-                link: absoluteUrl,
-                source: sourceName,
-                excludedBy: "external link",
-              })
-            }
-            return acc
+            return null
           }
 
-          acc.processedLinks.push({
+          return {
             name: name,
             link: absoluteUrl,
             source: sourceName,
-          })
-
-          return acc
-        },
-        { processedLinks: [], excludedLinks: [] },
-      )
+          }
+        })
+        .filter((item) => item !== null)
 
       allLinks.push(...processedLinks)
-      if (trackExcluded) {
-        allExcluded.push(...excludedLinks)
-      }
     } catch (error) {
       console.error(`Error processing source:`, error)
     }
@@ -345,64 +254,20 @@ function getLinks(options = {}) {
 
   // Apply regex filters functionally
   const regexFilterFunctions = createRegexFilters(regexFilters)
-  const { included: filteredLinks, excluded: regexExcluded } = applyFilters(
-    allLinks,
-    regexFilterFunctions,
-    regexMatchMode,
-  )
+  const filteredLinks = applyFilters(allLinks, regexFilterFunctions, regexMatchMode)
 
-  if (trackExcluded) {
-    allExcluded.push(...regexExcluded)
-  }
-
-  // Remove duplicates if requested and track what gets deduplicated
-  let finalLinks = filteredLinks
+  // Remove duplicates if requested
   if (deduplicate) {
     const seen = new Set()
-    const duplicates = []
-    const unique = []
-
-    filteredLinks.forEach((item) => {
+    return filteredLinks.filter((item) => {
       const key = `${item.name}|${item.link}`
-      if (seen.has(key)) {
-        if (trackExcluded) {
-          duplicates.push({
-            ...item,
-            excludedBy: "duplicate",
-          })
-        }
-      } else {
-        seen.add(key)
-        unique.push(item)
-      }
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
     })
-
-    finalLinks = unique
-    if (trackExcluded) {
-      allExcluded.push(...duplicates)
-    }
   }
 
-  // Return results with tracking info
-  const result = finalLinks
-  if (trackExcluded) {
-    result.excluded = allExcluded
-    result.stats = {
-      total:
-        allLinks.length +
-        allExcluded.filter(
-          (ex) => ex.excludedBy !== "duplicate" && ex.excludedBy !== "regex filters",
-        ).length,
-      included: finalLinks.length,
-      excluded: allExcluded.length,
-      exclusionReasons: allExcluded.reduce((acc, item) => {
-        acc[item.excludedBy] = (acc[item.excludedBy] || 0) + 1
-        return acc
-      }, {}),
-    }
-  }
-
-  return result
+  return filteredLinks
 }
 
 // Convenience function for basic DOM extraction (backward compatibility)
