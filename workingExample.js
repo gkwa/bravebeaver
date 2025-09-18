@@ -5,7 +5,9 @@ const links = getLinks({
       excludePatterns: ["twitter\\.com/\\w+$"],
     },
     name: {
+      excludeExact: ["save your seat"],
       excludePatterns: [
+        "free.*trial",
         "^view online$",
         "^unsubscribe$",
         "\\[email.*protected\\]",
