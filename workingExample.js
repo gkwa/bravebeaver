@@ -29,5 +29,6 @@ const links = getLinks({
 })
 
 copyToClipboard(links, "json")
+displayMetadata(links)
 // Display options
 console.table(links, ["name", "link"])
