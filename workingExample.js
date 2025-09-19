@@ -28,6 +28,6 @@ const links = getLinks({
   regexMatchMode: "all",
 })
 
-// Display options
-console.table(links)
 copyToClipboard(links, "json")
+// Display options
+console.table(links, ["name", "link"])
